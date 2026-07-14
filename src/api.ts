@@ -67,7 +67,8 @@ export async function pull(params: PullParams): Promise<PullResponse> {
 		throw new LinkwiseApiError("Obsidian sync is a Linkwise Pro feature.");
 	}
 	if (res.status >= 400) {
-		const msg = res.json?.error ?? `Sync failed (HTTP ${res.status}).`;
+		const body = res.json as { error?: string } | undefined;
+		const msg = body?.error ?? `Sync failed (HTTP ${res.status}).`;
 		throw new LinkwiseApiError(msg);
 	}
 

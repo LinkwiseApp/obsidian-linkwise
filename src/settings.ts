@@ -47,7 +47,7 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 			.setDesc("Generate this in the Linkwise app under Settings → Integrations → Linkwise for Obsidian, then paste it here.")
 			.addText((text) => {
 				text.inputEl.type = "password";
-				text.inputEl.style.width = "100%";
+				text.inputEl.addClass("linkwise-token-input");
 				text
 					.setPlaceholder("lw_pat_…")
 					.setValue(this.plugin.settings.token)

@@ -84,7 +84,7 @@ export class SyncEngine {
 	private buildIndex(): Map<string, TFile> {
 		const map = new Map<string, TFile>();
 		for (const file of this.app.vault.getMarkdownFiles()) {
-			const id = this.app.metadataCache.getFileCache(file)?.frontmatter?.linkwise_id;
+			const id: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.linkwise_id;
 			if (typeof id === "string" && id.length > 0) map.set(id, file);
 		}
 		return map;
@@ -151,7 +151,7 @@ export class SyncEngine {
 			case "ignore":
 				return false;
 			case "mark":
-				await this.app.fileManager.processFrontMatter(file, (fm) => {
+				await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 					fm.linkwise_deleted = true;
 				});
 				return true;
@@ -183,7 +183,7 @@ export class SyncEngine {
 			const baseNames: string[] = [];
 			for (const child of folder.children) {
 				if (child instanceof TFile && child.extension === "md" && child.basename !== "_MOC") {
-					const id = this.app.metadataCache.getFileCache(child)?.frontmatter?.linkwise_id;
+					const id: unknown = this.app.metadataCache.getFileCache(child)?.frontmatter?.linkwise_id;
 					if (typeof id === "string" && id.length > 0) baseNames.push(child.basename);
 				}
 			}
