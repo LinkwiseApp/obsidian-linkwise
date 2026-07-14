@@ -11,7 +11,7 @@ export interface PulledNote {
 	path: string;
 	/** YAML frontmatter incl. the `---` fences. */
 	frontmatter: string;
-	/** Body that lives between the `%% linkwise:start/end %%` markers. */
+	/** Managed body (source callout, summary, highlights) — rendered above the user's `## My notes`. */
 	managed: string;
 	/** Sanitized collection folder name (for MOC grouping). */
 	collection: string;

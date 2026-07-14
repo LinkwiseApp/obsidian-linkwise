@@ -1,57 +1,51 @@
-// Markdown composition & the fenced-region merge that makes sync local-first.
+// Markdown composition & the heading-boundary merge that makes sync local-first.
 //
-// The server hands us each note pre-rendered as frontmatter + a "managed" body.
-// Linkwise only ever owns the YAML frontmatter and the text BETWEEN the fence
-// markers; everything the user writes outside that fence is preserved verbatim
-// across re-syncs. These markers MUST stay byte-identical to the server copy in
-// _shared/obsidian-markdown.ts.
+// The server hands us each note pre-rendered as frontmatter + a "managed" body
+// (the source callout, summary and highlights). Linkwise owns the YAML
+// frontmatter and everything ABOVE the user-notes heading; everything from that
+// heading down is the user's and is preserved verbatim across re-syncs. There
+// are no visible marker comments — the `## My notes` heading is the divider.
 
-export const FENCE_START = "%% linkwise:start %%";
-export const FENCE_END = "%% linkwise:end %%";
+/** The heading that separates Linkwise-managed content (above) from the user's (below). */
+export const USER_SECTION_HEADING = "## My notes";
 
-/** Scaffolded once, below the fence, on first create. Never touched again. */
-const DEFAULT_TAIL = "## My notes\n\n";
+/** Matches the user-notes heading on its own line (tolerant of case & trailing space). */
+const USER_SECTION_RE = /^##\s+My notes\s*$/im;
 
 const FRONTMATTER_RE = /^---\n[\s\S]*?\n---\n?/;
-
-function fencedBlock(managed: string): string {
-  return `${FENCE_START}\n${managed}\n${FENCE_END}`;
-}
 
 /**
  * Build the full note text.
  *
- * - No `existing` → a fresh note: frontmatter + managed fence + an empty
- *   "My notes" section for the user.
- * - `existing` present → replace the frontmatter and the fenced region only,
- *   keeping any content the user added before or after the fence. If the user
- *   removed the fence entirely, it is re-inserted above their body.
+ * - No `existing` → a fresh note: frontmatter + managed content + an empty
+ *   "## My notes" section for the user.
+ * - `existing` present → rewrite the frontmatter and everything above the
+ *   `## My notes` heading, preserving that heading and all content below it. If
+ *   the user removed/renamed the heading, their whole body is preserved beneath
+ *   a freshly re-inserted `## My notes` divider (nothing is ever destroyed).
  */
 export function composeNote(frontmatter: string, managed: string, existing?: string | null): string {
-  const block = fencedBlock(managed);
+  const body = managed.trim();
+  const freshNote = `${frontmatter}\n\n${body}\n\n${USER_SECTION_HEADING}\n\n`;
 
   if (!existing || existing.trim().length === 0) {
-    return `${frontmatter}\n\n${block}\n\n${DEFAULT_TAIL}`;
+    return freshNote;
   }
 
   // Strip any existing frontmatter — we always rewrite it.
-  let rest = existing.replace(FRONTMATTER_RE, "");
+  const rest = existing.replace(FRONTMATTER_RE, "");
+  const match = USER_SECTION_RE.exec(rest);
 
-  const start = rest.indexOf(FENCE_START);
-  const end = rest.indexOf(FENCE_END);
-
-  if (start !== -1 && end !== -1 && end > start) {
-    const before = rest.slice(0, start).replace(/\s+$/, "");
-    const after = rest.slice(end + FENCE_END.length).replace(/^\s+/, "");
-    const middle = [before, block].filter((s) => s.length > 0).join("\n\n");
-    const tail = after.length > 0 ? `\n\n${after}` : `\n\n${DEFAULT_TAIL}`;
-    return `${frontmatter}\n\n${middle}${tail}`;
+  if (match) {
+    // Everything from the `## My notes` heading onward belongs to the user.
+    const userPart = rest.slice(match.index).replace(/\s+$/, "");
+    return `${frontmatter}\n\n${body}\n\n${userPart}\n`;
   }
 
-  // Fence missing (user deleted it) — re-add it above their body.
-  const body = rest.replace(/^\s+/, "");
-  const tail = body.length > 0 ? `\n\n${body}` : `\n\n${DEFAULT_TAIL}`;
-  return `${frontmatter}\n\n${block}${tail}`;
+  // Divider missing (user renamed/removed it) — keep their text, re-add the divider.
+  const preserved = rest.trim();
+  if (preserved.length === 0) return freshNote;
+  return `${frontmatter}\n\n${body}\n\n${USER_SECTION_HEADING}\n\n${preserved}\n`;
 }
 
 /** Escape a wikilink target so pipes/brackets in a title don't break the link. */
