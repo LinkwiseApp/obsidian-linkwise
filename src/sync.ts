@@ -173,7 +173,14 @@ export class SyncEngine {
 
 	// MARK: - Maps of Content
 
-	/** Rebuild `_MOC.md` for each collection whose notes changed this sync. */
+	/**
+	 * Rebuild the Map of Content for each collection whose notes changed this sync.
+	 *
+	 * The MOC file is named after its collection (e.g. `AI CONCEPTS.md`) so it reads
+	 * as the collection name — not a generic `_MOC` — in the graph and file explorer.
+	 * The MOC is identified by its `linkwise_moc: true` frontmatter, so legacy
+	 * `_MOC.md` files from older syncs are transparently renamed in place.
+	 */
 	private async regenerateMOCs(collections: Set<string>): Promise<void> {
 		for (const collection of collections) {
 			const folderPath = normalizePath(`${this.settings.vaultRoot}/${collection}`);
@@ -181,19 +188,39 @@ export class SyncEngine {
 			if (!(folder instanceof TFolder)) continue;
 
 			const baseNames: string[] = [];
+			let existingMoc: TFile | null = null;
 			for (const child of folder.children) {
-				if (child instanceof TFile && child.extension === "md" && child.basename !== "_MOC") {
-					const id: unknown = this.app.metadataCache.getFileCache(child)?.frontmatter?.linkwise_id;
-					if (typeof id === "string" && id.length > 0) baseNames.push(child.basename);
+				if (!(child instanceof TFile) || child.extension !== "md") continue;
+				const fm = this.app.metadataCache.getFileCache(child)?.frontmatter;
+				// The MOC carries `linkwise_moc: true` and no `linkwise_id`; a legacy MOC
+				// may still be named `_MOC`. Everything else with an id is a real note.
+				if (fm?.linkwise_moc === true || child.basename === "_MOC") {
+					existingMoc = child;
+					continue;
 				}
+				const id: unknown = fm?.linkwise_id;
+				if (typeof id === "string" && id.length > 0) baseNames.push(child.basename);
 			}
 
-			const mocPath = normalizePath(`${folderPath}/_MOC.md`);
 			const content = buildMOC(collection, baseNames);
-			const existing = this.app.vault.getAbstractFileByPath(mocPath);
-			if (existing instanceof TFile) {
-				await this.app.vault.modify(existing, content);
+			const desiredPath = normalizePath(`${folderPath}/${collection}.md`);
+
+			if (existingMoc) {
+				// Rename to the collection-named path when it's free (a note may already
+				// occupy it if one is titled exactly like the collection — leave it then).
+				if (
+					existingMoc.path !== desiredPath &&
+					!this.app.vault.getAbstractFileByPath(desiredPath)
+				) {
+					await this.app.fileManager.renameFile(existingMoc, desiredPath);
+				}
+				await this.app.vault.modify(existingMoc, content);
 			} else {
+				// A real note may already sit at the collection-named path; fall back so
+				// we never overwrite it.
+				const mocPath = this.app.vault.getAbstractFileByPath(desiredPath)
+					? normalizePath(`${folderPath}/${collection} (MOC).md`)
+					: desiredPath;
 				await this.app.vault.create(mocPath, content);
 			}
 		}

@@ -1,16 +1,16 @@
-# Linkwise for Obsidian
+# Linkwise Official
 
-The official [Linkwise](https://linkwise.app) plugin syncs your saved links,
-AI summaries, highlights, and collections from Linkwise into your Obsidian vault
-as clean Markdown notes.
+![beta](https://img.shields.io/badge/version-beta-orange)
+
+The official plugin created by [Linkwise](https://linkwise.app) team allow you to syncs your saved links,
+AI summaries, key questions, highlights, and collections from Linkwise into your
+Obsidian vault as clean Markdown notes.
 
 Sync is **one-way** (Linkwise → Obsidian), **incremental** (only what changed),
-and **local-first** — Linkwise keeps your summaries and highlights up to date, and
+and **local-first** - Linkwise keeps your summaries and highlights up to date, and
 anything *you* write in a note is never overwritten.
 
-> **Requires Linkwise Pro.** Works on Obsidian **desktop and mobile**.
-
----
+Note: Requires Linkwise Pro subscription.
 
 ## Download and installation
 
@@ -26,14 +26,12 @@ anything *you* write in a note is never overwritten.
 
 1. Download `main.js`, `manifest.json`, and `styles.css` from the
    [latest GitHub release](https://github.com/LinkwiseApp/obsidian-linkwise/releases).
-2. In your vault, create a folder named `linkwise-obsidian-plugin` inside
-   `.obsidian/plugins/` (open it from **Settings → Community plugins →** the folder
-   icon next to "Installed plugins").
+2. In your vault, create a folder named `linkwise` inside `.obsidian/plugins/`
+   (open it from **Settings → Community plugins →** the folder icon next to
+   "Installed plugins").
 3. Move the three files into that folder.
 4. Back in Obsidian, click the **refresh** button on the Community plugins page,
    then **enable Linkwise**. Click the gear icon to configure it.
-
----
 
 ## Connecting Obsidian with Linkwise
 
@@ -56,8 +54,6 @@ that you generate once in the Linkwise app.
    **Personal access token** field.
 2. (Optional) set your **Vault folder** and **Auto-sync interval** (see below).
 
----
-
 ## Syncing
 
 Trigger a sync any of these ways:
@@ -71,20 +67,21 @@ is matched by a hidden `linkwise_id`, so re-syncing **updates notes in place** �
 never creates duplicates, even if you renamed or moved the note. If you set an
 auto-sync interval, the plugin pulls new changes on that schedule automatically.
 
----
-
 ## What your vault looks like
 
 ```
 Linkwise/
   Research/
-    _MOC.md                     ← index note linking everything in this collection
+    Research.md                 ← index note (named after the collection), links everything in it
     Agent Harness Engineering.md
     Attention Is All You Need.md
-  Reading List/
-    _MOC.md
+  Unsorted/                     ← links you haven't filed into a collection yet
+    Unsorted.md
     …
 ```
+
+The index note is named after its collection, so its hub node in the **graph view**
+reads as the collection name.
 
 Each note:
 
@@ -96,6 +93,7 @@ url: "https://addyosmani.com/blog/agent-harness-engineering/"
 source: "addyosmani.com"
 collection: "Research"
 tags: [ai, agents]
+highlight_colors: [yellow, purple]   ← highlight colors used, so you can filter by them
 saved: 2026-06-16
 cover: "https://…"
 ---
@@ -103,16 +101,31 @@ cover: "https://…"
 > [!info] Saved from [addyosmani.com](https://…)
 
 ## Summary
+
 …the AI-generated summary…
 
-## Highlights
-> a passage you highlighted in Linkwise
+## Key questions
 
-your annotation on that highlight
+**A question the article answers**
+
+…the AI-generated answer…
+
+## Highlights
+
+<blockquote class="linkwise-highlight" data-color="yellow" style="border-left: 4px solid #FEF08A; …">
+a passage you highlighted in Linkwise
+</blockquote>
+
+*your annotation on that highlight*
 
 ## My notes
 Write anything you want here — it's yours and survives every re-sync.
 ```
+
+Each highlight keeps its **Linkwise color** — the left bar matches the color you used
+(yellow, purple, pink, blue, or green), and the `highlight_colors` property lets you
+filter notes by color (search `["highlight_colors":yellow]`, or Dataview
+`WHERE contains(highlight_colors, "yellow")`).
 
 **The golden rule:** everything **above** `## My notes` is managed by Linkwise (kept
 up to date each sync). Everything **from `## My notes` down is yours** and is never
