@@ -1,5 +1,7 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
+import qrcode from "qrcode-generator";
 import type LinkwisePlugin from "./main";
+import { startPairing, pollPairing, PairingError, type PairingSession } from "./pairing";
 
 export type DeletePolicy = "trash" | "mark" | "ignore";
 
@@ -30,8 +32,15 @@ export const DEFAULT_SETTINGS: LinkwiseSettings = {
 	lastSyncAt: "",
 };
 
+const POLL_INTERVAL_MS = 2500;
+
 export class LinkwiseSettingTab extends PluginSettingTab {
 	private plugin: LinkwisePlugin;
+
+	// QR-pairing state (only alive while the panel is open).
+	private pairing: PairingSession | null = null;
+	private pollTimer: number | null = null;
+	private expiryTimer: number | null = null;
 
 	constructor(app: App, plugin: LinkwisePlugin) {
 		super(app, plugin);
@@ -40,22 +49,10 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
+		this.stopPairing(); // never leave a poll loop running across a re-render
 		containerEl.empty();
 
-		new Setting(containerEl)
-			.setName("Personal access token")
-			.setDesc("Generate this in the Linkwise app under Settings → Integrations → Linkwise for Obsidian, then paste it here.")
-			.addText((text) => {
-				text.inputEl.type = "password";
-				text.inputEl.addClass("linkwise-token-input");
-				text
-					.setPlaceholder("lw_pat_…")
-					.setValue(this.plugin.settings.token)
-					.onChange(async (value) => {
-						this.plugin.settings.token = value.trim();
-						await this.plugin.saveSettings();
-					});
-			});
+		this.renderConnection(containerEl);
 
 		new Setting(containerEl)
 			.setName("Vault folder")
@@ -128,6 +125,21 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 		new Setting(containerEl).setName("Advanced").setHeading();
 
 		new Setting(containerEl)
+			.setName("Personal access token")
+			.setDesc("Manual fallback. Generate a token in the Linkwise app (Settings → Integrations → Linkwise for Obsidian) and paste it here instead of scanning.")
+			.addText((text) => {
+				text.inputEl.type = "password";
+				text.inputEl.addClass("linkwise-token-input");
+				text
+					.setPlaceholder("lw_pat_…")
+					.setValue(this.plugin.settings.token)
+					.onChange(async (value) => {
+						this.plugin.settings.token = value.trim();
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(containerEl)
 			.setName("API base URL")
 			.setDesc("Only change this if you're self-hosting or testing against a different backend.")
 			.addText((text) =>
@@ -154,5 +166,142 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 						this.display();
 					}),
 			);
+	}
+
+	hide(): void {
+		this.stopPairing();
+	}
+
+	// MARK: - Connection section
+
+	private renderConnection(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName("Connection").setHeading();
+
+		if (this.plugin.settings.token) {
+			new Setting(containerEl)
+				.setName("Connected to Linkwise")
+				.setDesc("The plugin is linked and will sync using your saved token.")
+				.addButton((btn) =>
+					btn
+						.setButtonText("Disconnect")
+						.setWarning()
+						.onClick(async () => {
+							this.plugin.settings.token = "";
+							this.plugin.settings.cursor = "";
+							await this.plugin.saveSettings();
+							new Notice("Linkwise: disconnected.");
+							this.display();
+						}),
+				);
+			return;
+		}
+
+		const scanSetting = new Setting(containerEl)
+			.setName("Connect with QR")
+			.setDesc("Generate a QR code, then scan it in the Linkwise app: Settings → Integrations → Linkwise for Obsidian → Scan to connect. Requires Linkwise Pro.");
+
+		const panel = containerEl.createDiv({ cls: "linkwise-qr-panel" });
+
+		scanSetting.addButton((btn) =>
+			btn
+				.setButtonText("Show QR code")
+				.setCta()
+				.onClick(() => void this.beginPairing(panel)),
+		);
+	}
+
+	// MARK: - Pairing flow
+
+	private async beginPairing(panel: HTMLElement): Promise<void> {
+		this.stopPairing();
+		panel.empty();
+		panel.createEl("p", { text: "Starting…", cls: "linkwise-qr-status" });
+
+		let session: PairingSession;
+		try {
+			session = await startPairing(this.plugin.settings.apiBaseUrl);
+		} catch (e) {
+			const msg = e instanceof PairingError || e instanceof Error ? e.message : String(e);
+			this.renderPairingError(panel, msg);
+			return;
+		}
+		this.pairing = session;
+
+		panel.empty();
+
+		// QR image (encodes the deep link the app recognizes).
+		const qr = qrcode(0, "M");
+		qr.addData(session.deep_link);
+		qr.make();
+		const img = panel.createEl("img", { cls: "linkwise-qr-image" });
+		img.src = qr.createDataURL(6, 4);
+		img.alt = "Linkwise pairing QR code";
+
+		panel.createEl("p", {
+			cls: "linkwise-qr-status",
+			text: "Scan this in the Linkwise app to connect. Waiting…",
+		});
+		panel.createEl("p", {
+			cls: "linkwise-qr-code",
+			text: `Or enter this code manually: ${session.code}`,
+		});
+
+		// Poll until approved/expired.
+		this.pollTimer = window.setInterval(() => void this.pollOnce(panel), POLL_INTERVAL_MS);
+		this.plugin.registerInterval(this.pollTimer);
+
+		// Hard stop at expiry (in case the request lapses server-side).
+		const ms = Math.max(1000, session.expires_in * 1000);
+		this.expiryTimer = window.setTimeout(() => this.renderExpired(panel), ms);
+	}
+
+	private async pollOnce(panel: HTMLElement): Promise<void> {
+		if (!this.pairing) return;
+		try {
+			const result = await pollPairing(this.plugin.settings.apiBaseUrl, this.pairing.request_id, this.pairing.secret);
+			if (result.status === "approved") {
+				this.stopPairing();
+				this.plugin.settings.token = result.token;
+				this.plugin.settings.cursor = "";
+				await this.plugin.saveSettings();
+				new Notice("Linkwise: connected! Starting first sync…");
+				void this.plugin.syncNow().then(() => this.display());
+				this.display();
+			} else if (result.status === "expired") {
+				this.renderExpired(panel);
+			}
+			// "pending" / "consumed" → keep waiting (consumed shouldn't happen for us).
+		} catch (e) {
+			// Transient network hiccups shouldn't kill the loop; log and keep polling.
+			console.error("Linkwise pairing poll failed", e);
+		}
+	}
+
+	private renderExpired(panel: HTMLElement): void {
+		this.stopPairing();
+		panel.empty();
+		panel.createEl("p", { cls: "linkwise-qr-status", text: "This code expired. Generate a new one." });
+		const btn = panel.createEl("button", { text: "New QR code", cls: "mod-cta" });
+		btn.addEventListener("click", () => void this.beginPairing(panel));
+	}
+
+	private renderPairingError(panel: HTMLElement, message: string): void {
+		this.stopPairing();
+		panel.empty();
+		panel.createEl("p", { cls: "linkwise-qr-status", text: message });
+		const btn = panel.createEl("button", { text: "Try again", cls: "mod-cta" });
+		btn.addEventListener("click", () => void this.beginPairing(panel));
+	}
+
+	private stopPairing(): void {
+		if (this.pollTimer !== null) {
+			window.clearInterval(this.pollTimer);
+			this.pollTimer = null;
+		}
+		if (this.expiryTimer !== null) {
+			window.clearTimeout(this.expiryTimer);
+			this.expiryTimer = null;
+		}
+		this.pairing = null;
 	}
 }

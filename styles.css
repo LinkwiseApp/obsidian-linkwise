@@ -2,3 +2,34 @@
 .linkwise-token-input {
 	width: 100%;
 }
+
+/* QR pairing panel. */
+.linkwise-qr-panel {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	margin: 4px 0 18px;
+}
+
+.linkwise-qr-image {
+	width: 200px;
+	height: 200px;
+	image-rendering: pixelated;
+	background: #fff;
+	padding: 8px;
+	border-radius: 8px;
+}
+
+.linkwise-qr-status {
+	margin: 0;
+	color: var(--text-muted);
+	text-align: center;
+}
+
+.linkwise-qr-code {
+	margin: 0;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	text-align: center;
+}

@@ -35,24 +35,29 @@ Note: Requires Linkwise Pro subscription.
 
 ## Connecting Obsidian with Linkwise
 
-Obsidian has no website login, so you connect by pasting a **personal access token**
-that you generate once in the Linkwise app.
+Connecting is a Linkwise **Pro** feature. There are two ways to do it — scanning a
+QR code is the quickest.
 
-### 1. Generate your token (in the Linkwise app)
+### Option A — Scan a QR code (recommended)
 
-1. Open **Linkwise** → **Settings → Integrations**.
-2. On the **Linkwise for Obsidian** card, tap **Generate token**.
-   (On the free plan you'll see the upgrade screen — this is a Pro feature.)
-3. A token starting with `lw_pat_…` appears. Tap **Copy**.
+No copy-paste. The plugin shows a QR code and the Linkwise app scans it.
 
-> ⚠️ **You'll only see this token once.** If you lose it, just generate a new one
-> (the old one stops working).
+1. In Obsidian → **Settings → Linkwise**, under **Connection**, click
+   **Show QR code**.
+2. Open **Linkwise** on your phone → **Settings → Integrations → Linkwise for
+   Obsidian** → **Scan to connect**, and point the camera at the QR code.
+3. That's it — the plugin connects itself and starts the first sync. (The code
+   expires after 5 minutes; if it lapses, click **New QR code**.)
 
-### 2. Paste it into the plugin
+### Option B — Paste a token manually
 
-1. In Obsidian → **Settings → Linkwise**, paste the token into the
+1. Open **Linkwise** → **Settings → Integrations → Linkwise for Obsidian** →
+   **Generate token**. A token starting with `lw_pat_…` appears — tap **Copy**.
+   > ⚠️ You'll only see this token once. If you lose it, generate a new one.
+2. In Obsidian → **Settings → Linkwise → Advanced**, paste it into the
    **Personal access token** field.
-2. (Optional) set your **Vault folder** and **Auto-sync interval** (see below).
+
+(Optional) set your **Vault folder** and **Auto-sync interval** (see below).
 
 ## Syncing
 
