@@ -1,6 +1,6 @@
 {
 	"name": "linkwise",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Sync your Linkwise links, highlights and collections into your Obsidian vault.",
 	"main": "main.js",
 	"type": "module",

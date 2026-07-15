@@ -2,8 +2,8 @@
 	"id": "linkwise",
 	"name": "Linkwise",
 	"version": "1.0.0",
-	"minAppVersion": "1.13.0",
-	"description": "Sync your Linkwise links, highlights and collections into your vault as Markdown notes. One-way, incremental, local-first.",
+	"minAppVersion": "1.5.0",
+	"description": "Sync your Linkwise links, highlights and collections into your vault as Markdown notes.",
 	"author": "Linkwise",
 	"authorUrl": "https://linkwise.app",
 	"isDesktopOnly": false

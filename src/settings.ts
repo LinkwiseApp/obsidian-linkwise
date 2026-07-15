@@ -162,7 +162,7 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 			.addButton((btn) =>
 				btn
 					.setButtonText("Reset cursor")
-					.setDestructive()
+					.setWarning()
 					.onClick(async () => {
 						this.plugin.settings.cursor = "";
 						await this.plugin.saveSettings();
@@ -188,7 +188,7 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 				.addButton((btn) =>
 					btn
 						.setButtonText("Disconnect")
-						.setDestructive()
+						.setWarning()
 						.onClick(async () => {
 							this.plugin.settings.token = "";
 							this.plugin.settings.cursor = "";
