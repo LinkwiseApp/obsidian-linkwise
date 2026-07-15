@@ -48,6 +48,10 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
+		this.renderSettings();
+	}
+
+	private renderSettings(): void {
 		const { containerEl } = this;
 		this.stopPairing(); // never leave a poll loop running across a re-render
 		containerEl.empty();
@@ -117,7 +121,7 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 					.setCta()
 					.onClick(async () => {
 						await this.plugin.syncNow();
-						this.display();
+						this.renderSettings();
 					}),
 			);
 
@@ -158,12 +162,12 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 			.addButton((btn) =>
 				btn
 					.setButtonText("Reset cursor")
-					.setWarning()
+					.setDestructive()
 					.onClick(async () => {
 						this.plugin.settings.cursor = "";
 						await this.plugin.saveSettings();
 						new Notice("Linkwise: sync cursor reset. Run 'Sync now' to re-pull everything.");
-						this.display();
+						this.renderSettings();
 					}),
 			);
 	}
@@ -184,13 +188,13 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 				.addButton((btn) =>
 					btn
 						.setButtonText("Disconnect")
-						.setWarning()
+						.setDestructive()
 						.onClick(async () => {
 							this.plugin.settings.token = "";
 							this.plugin.settings.cursor = "";
 							await this.plugin.saveSettings();
 							new Notice("Linkwise: disconnected.");
-							this.display();
+							this.renderSettings();
 						}),
 				);
 			return;
@@ -265,8 +269,8 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 				this.plugin.settings.cursor = "";
 				await this.plugin.saveSettings();
 				new Notice("Linkwise: connected! Starting first sync…");
-				void this.plugin.syncNow().then(() => this.display());
-				this.display();
+				void this.plugin.syncNow().then(() => this.renderSettings());
+				this.renderSettings();
 			} else if (result.status === "expired") {
 				this.renderExpired(panel);
 			}
