@@ -73,7 +73,7 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Auto-sync interval")
-			.setDesc("How often to pull automatically. 'Manual only' pulls when you run the Sync command.")
+			.setDesc("How often to pull automatically. 'manual only' pulls when you run the sync command.")
 			.addDropdown((dd) =>
 				dd
 					.addOptions({
@@ -166,7 +166,7 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 					.onClick(async () => {
 						this.plugin.settings.cursor = "";
 						await this.plugin.saveSettings();
-						new Notice("Linkwise: sync cursor reset. Run 'Sync now' to re-pull everything.");
+						new Notice("Linkwise: sync cursor reset. Run 'sync now' to re-pull everything.");
 						this.renderSettings();
 					}),
 			);
@@ -202,7 +202,7 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 
 		const scanSetting = new Setting(containerEl)
 			.setName("Connect with QR")
-			.setDesc("Generate a QR code, then scan it in the Linkwise app: Settings → Integrations → Linkwise for Obsidian → Scan to connect. Requires Linkwise Pro.");
+			.setDesc("Generate a QR code, then scan it in the Linkwise app: Settings → Integrations → Linkwise for Obsidian → scan to connect. Requires Linkwise Pro.");
 
 		const panel = containerEl.createDiv({ cls: "linkwise-qr-panel" });
 

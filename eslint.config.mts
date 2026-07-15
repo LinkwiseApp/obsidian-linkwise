@@ -29,4 +29,17 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		rules: {
+			'obsidianmd/ui/sentence-case': [
+				'warn',
+				{
+					brands: ['Linkwise', 'Obsidian', 'Markdown', 'Pro'],
+					acronyms: ['QR', 'MOC', 'API', 'PAT', 'ISO', 'ID', 'URL'],
+					ignoreRegex: ['^(lw_pat_.*|.*→.*)$'],
+				},
+			],
+			'obsidianmd/settings-tab/prefer-setting-definitions': 'off',
+		},
+	},
 );
