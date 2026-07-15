@@ -159,17 +159,18 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Reset sync state")
 			.setDesc("Forget the sync cursor so the next sync re-pulls everything. Existing notes are merged by ID, not duplicated.")
-			.addButton((btn) =>
+			.addButton((btn) => {
+				btn.buttonEl.addClass("mod-warning");
 				btn
 					.setButtonText("Reset cursor")
-					.setWarning()
 					.onClick(async () => {
 						this.plugin.settings.cursor = "";
 						await this.plugin.saveSettings();
 						new Notice("Linkwise: sync cursor reset. Run 'sync now' to re-pull everything.");
 						this.renderSettings();
-					}),
-			);
+					});
+			});
+
 	}
 
 	hide(): void {
@@ -185,18 +186,18 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 			new Setting(containerEl)
 				.setName("Connected to Linkwise")
 				.setDesc("The plugin is linked and will sync using your saved token.")
-				.addButton((btn) =>
+				.addButton((btn) => {
+					btn.buttonEl.addClass("mod-warning");
 					btn
 						.setButtonText("Disconnect")
-						.setWarning()
 						.onClick(async () => {
 							this.plugin.settings.token = "";
 							this.plugin.settings.cursor = "";
 							await this.plugin.saveSettings();
 							new Notice("Linkwise: disconnected.");
 							this.renderSettings();
-						}),
-				);
+						});
+				});
 			return;
 		}
 
