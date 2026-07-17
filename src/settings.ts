@@ -18,6 +18,8 @@ export interface LinkwiseSettings {
 	deletePolicy: DeletePolicy;
 	/** Keep the server's "Saved from <source>" banner at the top of each note. */
 	showSavedFrom: boolean;
+	/** Show the article's cover image at the top of each note. */
+	showCover: boolean;
 	/** Incremental cursor (ISO timestamp). Empty = full sync from scratch. */
 	cursor: string;
 	/** Last successful sync (ISO), for the status bar. */
@@ -31,6 +33,7 @@ export const DEFAULT_SETTINGS: LinkwiseSettings = {
 	syncIntervalMinutes: 0,
 	deletePolicy: "mark",
 	showSavedFrom: false,
+	showCover: true,
 	cursor: "",
 	lastSyncAt: "",
 };
@@ -121,6 +124,20 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.showSavedFrom)
 					.onChange(async (value) => {
 						this.plugin.settings.showSavedFrom = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Show cover image")
+			.setDesc(
+				"Show the article's cover image at the top of each note. Applies to newly synced notes; reset the sync state below to re-apply to every note.",
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.showCover)
+					.onChange(async (value) => {
+						this.plugin.settings.showCover = value;
 						await this.plugin.saveSettings();
 					}),
 			);

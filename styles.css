@@ -3,6 +3,16 @@
 	width: 100%;
 }
 
+/* Cover image at the top of a synced note. */
+.linkwise-cover {
+	display: block;
+	width: 100%;
+	max-height: 320px;
+	object-fit: cover;
+	border-radius: 8px;
+	margin: 0.2em 0 0.6em;
+}
+
 /* QR pairing panel. */
 .linkwise-qr-panel {
 	display: flex;

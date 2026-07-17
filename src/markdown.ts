@@ -68,6 +68,41 @@ export function stripSavedFromBanner(managed: string): string {
     .replace(/^\s*\n/, "");
 }
 
+/**
+ * Read a scalar value for `key` out of a YAML frontmatter string, or null.
+ *
+ * The server writes values JSON-quoted (see the edge function's `yamlString`), so
+ * a quoted value is unwrapped back to its raw string; unquoted values pass through.
+ * Only the top-level `key:` line is matched — enough for the flat frontmatter we emit.
+ */
+export function frontmatterValue(frontmatter: string, key: string): string | null {
+  const re = new RegExp(`^${key}:[ \\t]*(.+?)[ \\t]*$`, "m");
+  const match = re.exec(frontmatter);
+  const raw = match?.[1]?.trim();
+  if (!raw) return null;
+  if (raw.startsWith('"')) {
+    try {
+      return JSON.parse(raw) as string;
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
+}
+
+/**
+ * An `<img>` block for a note's cover, or "" when the URL is missing or isn't a
+ * remote http(s) image. Rendered as HTML (not `![]()`) so it can carry the
+ * `linkwise-cover` class that styles.css sizes and rounds.
+ */
+export function coverImage(url: string | null): string {
+  const trimmed = url?.trim();
+  if (!trimmed || !/^https?:\/\//i.test(trimmed)) return "";
+  // URLs shouldn't contain quotes, but guard the attribute just in case.
+  const safe = trimmed.replace(/"/g, "%22");
+  return `<img class="linkwise-cover" src="${safe}" alt="Cover image" referrerpolicy="no-referrer">`;
+}
+
 /** Tag stamped on every MOC note — the anchor for the graph color group. */
 export const MOC_TAG = "linkwise/moc";
 
@@ -100,7 +135,7 @@ export function buildMOC(collection: string, noteBaseNames: string[]): string {
     "---",
     "",
     "> [!info] Map of Content",
-    `> Index of the **${collection}** collection — ${countLabel}.`,
+    `> Index of the **${collection}** collection : ${countLabel}.`,
     "",
     body,
     "",

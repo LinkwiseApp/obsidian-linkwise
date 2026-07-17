@@ -9,7 +9,14 @@
 
 import { normalizePath, TFile, TFolder } from "obsidian";
 import { pull, type PulledNote, type Tombstone } from "./api";
-import { composeNote, buildMOC, mocBaseName, stripSavedFromBanner } from "./markdown";
+import {
+	composeNote,
+	buildMOC,
+	mocBaseName,
+	stripSavedFromBanner,
+	coverImage,
+	frontmatterValue,
+} from "./markdown";
 import type LinkwisePlugin from "./main";
 
 export interface SyncResult {
@@ -109,9 +116,16 @@ export class SyncEngine {
 		return "created";
 	}
 
-	/** The managed body to write — banner stripped unless the user opted to keep it. */
+	/**
+	 * The managed body to write: the server's body with the "Saved from" banner
+	 * stripped unless kept, and the cover image (from the note's frontmatter)
+	 * prepended unless turned off.
+	 */
 	private managedBody(note: PulledNote): string {
-		return this.settings.showSavedFrom ? note.managed : stripSavedFromBanner(note.managed);
+		const base = this.settings.showSavedFrom ? note.managed : stripSavedFromBanner(note.managed);
+		if (!this.settings.showCover) return base;
+		const cover = coverImage(frontmatterValue(note.frontmatter, "cover"));
+		return cover ? `${cover}\n\n${base}` : base;
 	}
 
 	/**

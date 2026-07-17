@@ -14,6 +14,7 @@ The official Obsidian integration for [Linkwise](https://linkwise.app). Effortle
 *   **Distinct Collection Maps:** Each collection gets a **Map of Content** hub note (`🗺️ <Collection>`) that stands apart from the links it indexes — a 🗺️ map marker in its name, a summary callout with a live link count, and a `#linkwise/moc` tag.
 *   **One-Click Graph Colors:** A **Set up graph colors** command paints your collection maps a distinct color in Obsidian's graph, so hubs pop out from the notes around them — without disturbing any graph settings you've already made.
 *   **Clean Notes by Default:** The source "Saved from …" banner is hidden out of the box for a tidier note; flip it back on any time with a single toggle.
+*   **Cover Images:** The article's cover image is shown at the top of each note (when Linkwise has one), styled to fit. Toggle it off if you prefer text-only notes.
 
 > 📝 **Note:** This plugin requires an active [Linkwise Pro](https://linkwise.app/docs/linkwise-pro-subscription) subscription.
 
@@ -92,7 +93,7 @@ tags: [linkwise/moc]
 ---
 
 > [!info] Map of Content
-> Index of the **Research** collection — 12 links.
+> Index of the **Research** collection : 12 links.
 
 - [[Agent Harness Engineering]]
 - [[Attention Is All You Need]]
@@ -101,7 +102,7 @@ tags: [linkwise/moc]
 Run **Linkwise: Set up graph colors** (Command Palette, or the button in settings) to color these hubs distinctly in the graph view. See [Graph Colors](#graph-colors) below.
 
 ### Note Blueprint
-Every synced note features rich properties (frontmatter) and a clean sections layout. The source "Saved from …" callout is **hidden by default**; enable **Show 'Saved from' banner** in settings to include it (shown commented below):
+Every synced note features rich properties (frontmatter) and a clean sections layout. When Linkwise has a cover image for the article, it's shown at the top (toggle: **Show cover image**, on by default). The source "Saved from …" callout is **hidden by default**; enable **Show 'Saved from' banner** in settings to include it (both shown below):
 
 ```markdown
 ---
@@ -115,6 +116,8 @@ highlight_colors: [yellow, purple]
 saved: 2026-06-16
 cover: "https://..."
 ---
+
+<img class="linkwise-cover" src="https://addyosmani.com/assets/images/agent-harness.jpg" alt="Cover image" referrerpolicy="no-referrer">
 
 <!-- Shown only when "Show 'Saved from' banner" is enabled: -->
 <!-- > [!info] Saved from [addyosmani.com](https://addyosmani.com/blog/agent-harness-engineering/) -->
@@ -162,6 +165,7 @@ The command is **non-destructive**: it only adds groups whose query you don't al
 | **Vault Folder** | The target directory path where all Linkwise notes will be written. | `Linkwise` |
 | **Auto-Sync Interval** | The frequency at which the plugin checks for updates in the background. | `Manual only` |
 | **On Deletion Strategy** | How to handle notes when their corresponding link is removed from Linkwise. Options: `Mark` (appends `linkwise_deleted: true`), `Trash` (moves to `_trash` folder), or `Ignore`. | `Mark` |
+| **Show cover image** | Show the article's cover image at the top of each note (when one exists). Applies to newly synced notes; reset the sync state to re-apply to every note. | `On` |
 | **Show 'Saved from' banner** | Keep the source callout at the top of each note. Off gives a cleaner note. Applies to newly synced notes; reset the sync state to re-apply to every note. | `Off` |
 | **Graph colors** | One-click button that adds graph color groups so collection maps stand out from notes. Non-destructive. | *N/A* |
 | **API Base URL** *(Advanced)* | Custom endpoint configuration. Only modify if self-hosting or testing locally. | *Production API* |
