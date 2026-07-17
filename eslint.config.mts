@@ -34,7 +34,7 @@ export default defineConfig(
 			'obsidianmd/ui/sentence-case': [
 				'warn',
 				{
-					brands: ['Linkwise', 'Obsidian', 'Markdown', 'Pro'],
+					brands: ['Linkwise', 'Obsidian', 'Markdown', 'Pro', 'Saved from'],
 					acronyms: ['QR', 'MOC', 'API', 'PAT', 'ISO', 'ID', 'URL'],
 					ignoreRegex: ['^(lw_pat_.*|.*→.*)$'],
 				},

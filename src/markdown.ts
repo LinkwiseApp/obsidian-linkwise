@@ -54,21 +54,88 @@ export function wikilinkTarget(fileBaseName: string): string {
 }
 
 /**
+ * Remove the server-rendered "Saved from <source>" banner from a managed body.
+ *
+ * The banner is an Obsidian callout (`> [!info] Saved from …`) the server renders
+ * at the top of the managed region. Matches that callout — its first line plus any
+ * `>` continuation lines — then collapses the blank gap it leaves behind so the
+ * summary starts cleanly. Anything else in the managed body is untouched.
+ */
+export function stripSavedFromBanner(managed: string): string {
+  return managed
+    .replace(/^[ \t]*>[^\n]*\bSaved from\b[^\n]*(?:\n[ \t]*>[^\n]*)*\n?/im, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\s*\n/, "");
+}
+
+/**
+ * Read a scalar value for `key` out of a YAML frontmatter string, or null.
+ *
+ * The server writes values JSON-quoted (see the edge function's `yamlString`), so
+ * a quoted value is unwrapped back to its raw string; unquoted values pass through.
+ * Only the top-level `key:` line is matched — enough for the flat frontmatter we emit.
+ */
+export function frontmatterValue(frontmatter: string, key: string): string | null {
+  const re = new RegExp(`^${key}:[ \\t]*(.+?)[ \\t]*$`, "m");
+  const match = re.exec(frontmatter);
+  const raw = match?.[1]?.trim();
+  if (!raw) return null;
+  if (raw.startsWith('"')) {
+    try {
+      return JSON.parse(raw) as string;
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
+}
+
+/**
+ * An `<img>` block for a note's cover, or "" when the URL is missing or isn't a
+ * remote http(s) image. Rendered as HTML (not `![]()`) so it can carry the
+ * `linkwise-cover` class that styles.css sizes and rounds.
+ */
+export function coverImage(url: string | null): string {
+  const trimmed = url?.trim();
+  if (!trimmed || !/^https?:\/\//i.test(trimmed)) return "";
+  // URLs shouldn't contain quotes, but guard the attribute just in case.
+  const safe = trimmed.replace(/"/g, "%22");
+  return `<img class="linkwise-cover" src="${safe}" alt="Cover image" referrerpolicy="no-referrer">`;
+}
+
+/** Tag stamped on every MOC note — the anchor for the graph color group. */
+export const MOC_TAG = "linkwise/moc";
+
+/** Basename (no extension) of a collection's Map of Content note. */
+export function mocBaseName(collection: string): string {
+  return `🗺️ ${collection}`;
+}
+
+/**
  * A Map of Content for one collection: a fully Linkwise-managed index note that
- * wikilinks every synced note in the collection. Regenerated wholesale each sync
+ * wikilinks every synced link in the collection. Regenerated wholesale each sync
  * (it carries no user content), and marked so the indexer skips it.
+ *
+ * The note is deliberately styled to stand apart from the links it indexes: the
+ * filename carries a `🗺️` map marker, a callout summarizes the link count, and the
+ * `linkwise/moc` tag lets the "Set up graph colors" command paint it a distinct
+ * color. The note title comes from the filename, so there is no redundant heading.
  */
 export function buildMOC(collection: string, noteBaseNames: string[]): string {
   const sorted = [...noteBaseNames].sort((a, b) => a.localeCompare(b));
   const links = sorted.map((n) => `- [[${wikilinkTarget(n)}]]`).join("\n");
-  const body = links.length > 0 ? links : "_No notes yet._";
+  const count = sorted.length;
+  const body = count > 0 ? links : "_No links yet._";
+  const countLabel = count === 1 ? "1 link" : `${count} links`;
   return [
     "---",
     "linkwise_moc: true",
     `collection: ${JSON.stringify(collection)}`,
+    `tags: [${MOC_TAG}]`,
     "---",
     "",
-    `# ${collection}`,
+    "> [!info] Map of Content",
+    `> Index of the **${collection}** collection : ${countLabel}.`,
     "",
     body,
     "",
