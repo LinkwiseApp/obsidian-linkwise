@@ -1,4 +1,5 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
+import type { SettingDefinitionItem } from "obsidian";
 import qrcode from "qrcode-generator";
 import type LinkwisePlugin from "./main";
 import { startPairing, pollPairing, PairingError, type PairingSession } from "./pairing";
@@ -16,8 +17,6 @@ export interface LinkwiseSettings {
 	syncIntervalMinutes: number;
 	/** What to do when a link is deleted in Linkwise. */
 	deletePolicy: DeletePolicy;
-	/** Keep the server's "Saved from <source>" banner at the top of each note. */
-	showSavedFrom: boolean;
 	/** Show the article's cover image at the top of each note. */
 	showCover: boolean;
 	/** Incremental cursor (ISO timestamp). Empty = full sync from scratch. */
@@ -32,13 +31,30 @@ export const DEFAULT_SETTINGS: LinkwiseSettings = {
 	vaultRoot: "Linkwise",
 	syncIntervalMinutes: 0,
 	deletePolicy: "mark",
-	showSavedFrom: false,
 	showCover: true,
 	cursor: "",
 	lastSyncAt: "",
 };
 
 const POLL_INTERVAL_MS = 2500;
+
+// Descriptions shared by the declarative definitions (for search) and the
+// imperative builders (for rendering), so the two never drift apart.
+const DESC = {
+	connected: "The plugin is linked and will sync using your saved token.",
+	connect:
+		"Generate a QR code, then scan it in the Linkwise app: Settings → Integrations → Linkwise for Obsidian → scan to connect. Requires Linkwise Pro.",
+	vaultFolder: "Root folder synced notes are written into.",
+	autoSync: "How often to pull automatically. 'manual only' pulls when you run the sync command.",
+	deletePolicy: "How to treat notes whose source was removed. Your text is never hard-deleted by default.",
+	showCover:
+		"Show the article's cover image at the top of each note. Applies to newly synced notes; reset the sync state below to re-apply to every note.",
+	graphColors:
+		"Color-code the graph so collection maps stand out from the notes they link. Adds color groups to your graph settings without touching anything you've already set.",
+	token: "Manual fallback. Generate a token in the Linkwise app (Settings → Integrations → Linkwise for Obsidian) and paste it here instead of scanning.",
+	apiBaseUrl: "Only change this if you're self-hosting or testing against a different backend.",
+	reset: "Forget the sync cursor so the next sync re-pulls everything. Existing notes are merged by ID, not duplicated.",
+} as const;
 
 export class LinkwiseSettingTab extends PluginSettingTab {
 	private plugin: LinkwisePlugin;
@@ -53,6 +69,89 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	/**
+	 * Declarative settings (Obsidian 1.13+): the framework renders these and
+	 * indexes each row's name/desc for the settings search. Every row delegates
+	 * to the same builder the imperative `display()` fallback uses, so there is a
+	 * single source of truth for the UI. On Obsidian < 1.13 this method is unknown
+	 * and `display()` runs instead.
+	 */
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		this.stopPairing(); // re-run on every (re)render; never leave a poll loop live
+		const s = this.plugin.settings;
+		return [
+			{
+				type: "group",
+				heading: "Connection",
+				items: [
+					{
+						name: s.token ? "Connected to Linkwise" : "Connect with QR",
+						desc: s.token ? DESC.connected : DESC.connect,
+						aliases: ["pair", "qr code", "token", "disconnect", "connect"],
+						render: (setting) => this.buildConnection(setting),
+					},
+				],
+			},
+			{
+				name: "Vault folder",
+				desc: DESC.vaultFolder,
+				render: (setting) => this.buildVaultFolder(setting),
+			},
+			{
+				name: "Auto-sync interval",
+				desc: DESC.autoSync,
+				render: (setting) => this.buildAutoSync(setting),
+			},
+			{
+				name: "When a link is deleted in Linkwise",
+				desc: DESC.deletePolicy,
+				render: (setting) => this.buildDeletePolicy(setting),
+			},
+			{
+				name: "Show cover image",
+				desc: DESC.showCover,
+				aliases: ["cover", "image", "thumbnail"],
+				render: (setting) => this.buildShowCover(setting),
+			},
+			{
+				name: "Graph colors",
+				desc: DESC.graphColors,
+				aliases: ["graph", "colors", "map of content", "moc"],
+				render: (setting) => this.buildGraphColors(setting),
+			},
+			{
+				name: "Sync",
+				desc: this.syncDesc(),
+				aliases: ["sync now", "pull"],
+				render: (setting) => this.buildSync(setting),
+			},
+			{
+				type: "group",
+				heading: "Advanced",
+				items: [
+					{
+						name: "Personal access token",
+						desc: DESC.token,
+						aliases: ["pat", "lw_pat"],
+						render: (setting) => this.buildToken(setting),
+					},
+					{
+						name: "API base URL",
+						desc: DESC.apiBaseUrl,
+						render: (setting) => this.buildApiBaseUrl(setting),
+					},
+					{
+						name: "Reset sync state",
+						desc: DESC.reset,
+						aliases: ["cursor", "re-pull", "full sync"],
+						render: (setting) => this.buildReset(setting),
+					},
+				],
+			},
+		];
+	}
+
+	/** Imperative fallback for Obsidian < 1.13 (no declarative settings API). */
 	display(): void {
 		this.renderSettings();
 	}
@@ -62,11 +161,43 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 		this.stopPairing(); // never leave a poll loop running across a re-render
 		containerEl.empty();
 
-		this.renderConnection(containerEl);
+		new Setting(containerEl).setName("Connection").setHeading();
+		this.buildConnection(new Setting(containerEl), containerEl);
 
-		new Setting(containerEl)
+		this.buildVaultFolder(new Setting(containerEl));
+		this.buildAutoSync(new Setting(containerEl));
+		this.buildDeletePolicy(new Setting(containerEl));
+		this.buildShowCover(new Setting(containerEl));
+		this.buildGraphColors(new Setting(containerEl));
+		this.buildSync(new Setting(containerEl));
+
+		new Setting(containerEl).setName("Advanced").setHeading();
+		this.buildToken(new Setting(containerEl));
+		this.buildApiBaseUrl(new Setting(containerEl));
+		this.buildReset(new Setting(containerEl));
+	}
+
+	/**
+	 * Re-render after a state change, on either path: `update()` re-runs the
+	 * declarative definitions (1.13+); older Obsidian falls back to a full
+	 * imperative re-render.
+	 */
+	private rerender(): void {
+		const tab = this as unknown as { update?: () => void };
+		if (typeof tab.update === "function") tab.update();
+		else this.renderSettings();
+	}
+
+	hide(): void {
+		this.stopPairing();
+	}
+
+	// MARK: - Setting builders (shared by the declarative & fallback paths)
+
+	private buildVaultFolder(setting: Setting): void {
+		setting
 			.setName("Vault folder")
-			.setDesc("Root folder synced notes are written into.")
+			.setDesc(DESC.vaultFolder)
 			.addText((text) =>
 				text
 					.setPlaceholder("Linkwise")
@@ -76,10 +207,12 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}),
 			);
+	}
 
-		new Setting(containerEl)
+	private buildAutoSync(setting: Setting): void {
+		setting
 			.setName("Auto-sync interval")
-			.setDesc("How often to pull automatically. 'manual only' pulls when you run the sync command.")
+			.setDesc(DESC.autoSync)
 			.addDropdown((dd) =>
 				dd
 					.addOptions({
@@ -96,10 +229,12 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 						this.plugin.reconfigureAutoSync();
 					}),
 			);
+	}
 
-		new Setting(containerEl)
+	private buildDeletePolicy(setting: Setting): void {
+		setting
 			.setName("When a link is deleted in Linkwise")
-			.setDesc("How to treat notes whose source was removed. Your text is never hard-deleted by default.")
+			.setDesc(DESC.deletePolicy)
 			.addDropdown((dd) =>
 				dd
 					.addOptions({
@@ -113,26 +248,12 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}),
 			);
+	}
 
-		new Setting(containerEl)
-			.setName("Show 'Saved from' banner")
-			.setDesc(
-				"Keep the source callout at the top of each note. Off by default for a cleaner note. Changes apply to newly synced notes; reset the sync state below to re-apply to every note.",
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.showSavedFrom)
-					.onChange(async (value) => {
-						this.plugin.settings.showSavedFrom = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
+	private buildShowCover(setting: Setting): void {
+		setting
 			.setName("Show cover image")
-			.setDesc(
-				"Show the article's cover image at the top of each note. Applies to newly synced notes; reset the sync state below to re-apply to every note.",
-			)
+			.setDesc(DESC.showCover)
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.showCover)
@@ -141,39 +262,44 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}),
 			);
+	}
 
-		new Setting(containerEl)
+	private buildGraphColors(setting: Setting): void {
+		setting
 			.setName("Graph colors")
-			.setDesc("Color-code the graph so collection maps stand out from the notes they link. Adds color groups to your graph settings without touching anything you've already set.")
+			.setDesc(DESC.graphColors)
 			.addButton((btn) =>
 				btn
 					.setButtonText("Set up graph colors")
 					.onClick(() => void this.plugin.setupGraphColors()),
 			);
+	}
 
-		new Setting(containerEl)
+	private syncDesc(): string {
+		return this.plugin.settings.lastSyncAt
+			? `Last synced: ${new Date(this.plugin.settings.lastSyncAt).toLocaleString()}`
+			: "Not synced yet.";
+	}
+
+	private buildSync(setting: Setting): void {
+		setting
 			.setName("Sync")
-			.setDesc(
-				this.plugin.settings.lastSyncAt
-					? `Last synced: ${new Date(this.plugin.settings.lastSyncAt).toLocaleString()}`
-					: "Not synced yet.",
-			)
+			.setDesc(this.syncDesc())
 			.addButton((btn) =>
 				btn
 					.setButtonText("Sync now")
 					.setCta()
 					.onClick(async () => {
 						await this.plugin.syncNow();
-						this.renderSettings();
+						this.rerender();
 					}),
 			);
+	}
 
-		// Advanced ----------------------------------------------------------------
-		new Setting(containerEl).setName("Advanced").setHeading();
-
-		new Setting(containerEl)
+	private buildToken(setting: Setting): void {
+		setting
 			.setName("Personal access token")
-			.setDesc("Manual fallback. Generate a token in the Linkwise app (Settings → Integrations → Linkwise for Obsidian) and paste it here instead of scanning.")
+			.setDesc(DESC.token)
 			.addText((text) => {
 				text.inputEl.type = "password";
 				text.inputEl.addClass("linkwise-token-input");
@@ -185,10 +311,12 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					});
 			});
+	}
 
-		new Setting(containerEl)
+	private buildApiBaseUrl(setting: Setting): void {
+		setting
 			.setName("API base URL")
-			.setDesc("Only change this if you're self-hosting or testing against a different backend.")
+			.setDesc(DESC.apiBaseUrl)
 			.addText((text) =>
 				text
 					.setPlaceholder(DEFAULT_SETTINGS.apiBaseUrl)
@@ -198,59 +326,54 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}),
 			);
-
-		new Setting(containerEl)
-			.setName("Reset sync state")
-			.setDesc("Forget the sync cursor so the next sync re-pulls everything. Existing notes are merged by ID, not duplicated.")
-			.addButton((btn) => {
-				btn.buttonEl.addClass("mod-warning");
-				btn
-					.setButtonText("Reset cursor")
-					.onClick(async () => {
-						this.plugin.settings.cursor = "";
-						await this.plugin.saveSettings();
-						new Notice("Linkwise: sync cursor reset. Run 'sync now' to re-pull everything.");
-						this.renderSettings();
-					});
-			});
-
 	}
 
-	hide(): void {
-		this.stopPairing();
+	private buildReset(setting: Setting): void {
+		setting
+			.setName("Reset sync state")
+			.setDesc(DESC.reset)
+			.addButton((btn) => {
+				btn.buttonEl.addClass("mod-warning");
+				btn.setButtonText("Reset cursor").onClick(async () => {
+					this.plugin.settings.cursor = "";
+					await this.plugin.saveSettings();
+					new Notice("Linkwise: sync cursor reset. Run 'sync now' to re-pull everything.");
+					this.rerender();
+				});
+			});
 	}
 
 	// MARK: - Connection section
 
-	private renderConnection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName("Connection").setHeading();
-
+	/**
+	 * The connection row: either a "Connected / Disconnect" row, or a "Connect
+	 * with QR" row with an inline pairing panel. The QR panel is appended to
+	 * `container` when given (the fallback path), otherwise next to the row itself
+	 * (the declarative path renders the row into its own list).
+	 */
+	private buildConnection(setting: Setting, container?: HTMLElement): void {
+		const host = container ?? setting.settingEl.parentElement ?? this.containerEl;
 		if (this.plugin.settings.token) {
-			new Setting(containerEl)
+			setting
 				.setName("Connected to Linkwise")
-				.setDesc("The plugin is linked and will sync using your saved token.")
+				.setDesc(DESC.connected)
 				.addButton((btn) => {
 					btn.buttonEl.addClass("mod-warning");
-					btn
-						.setButtonText("Disconnect")
-						.onClick(async () => {
-							this.plugin.settings.token = "";
-							this.plugin.settings.cursor = "";
-							await this.plugin.saveSettings();
-							new Notice("Linkwise: disconnected.");
-							this.renderSettings();
-						});
+					btn.setButtonText("Disconnect").onClick(async () => {
+						this.plugin.settings.token = "";
+						this.plugin.settings.cursor = "";
+						await this.plugin.saveSettings();
+						new Notice("Linkwise: disconnected.");
+						this.rerender();
+					});
 				});
 			return;
 		}
 
-		const scanSetting = new Setting(containerEl)
-			.setName("Connect with QR")
-			.setDesc("Generate a QR code, then scan it in the Linkwise app: Settings → Integrations → Linkwise for Obsidian → scan to connect. Requires Linkwise Pro.");
+		setting.setName("Connect with QR").setDesc(DESC.connect);
 
-		const panel = containerEl.createDiv({ cls: "linkwise-qr-panel" });
-
-		scanSetting.addButton((btn) =>
+		const panel = host.createDiv({ cls: "linkwise-qr-panel" });
+		setting.addButton((btn) =>
 			btn
 				.setButtonText("Show QR code")
 				.setCta()
@@ -313,8 +436,8 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 				this.plugin.settings.cursor = "";
 				await this.plugin.saveSettings();
 				new Notice("Linkwise: connected! Starting first sync…");
-				void this.plugin.syncNow().then(() => this.renderSettings());
-				this.renderSettings();
+				void this.plugin.syncNow().then(() => this.rerender());
+				this.rerender();
 			} else if (result.status === "expired") {
 				this.renderExpired(panel);
 			}

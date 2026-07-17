@@ -118,11 +118,11 @@ export class SyncEngine {
 
 	/**
 	 * The managed body to write: the server's body with the "Saved from" banner
-	 * stripped unless kept, and the cover image (from the note's frontmatter)
-	 * prepended unless turned off.
+	 * stripped, and the cover image (from the note's frontmatter) prepended unless
+	 * turned off.
 	 */
 	private managedBody(note: PulledNote): string {
-		const base = this.settings.showSavedFrom ? note.managed : stripSavedFromBanner(note.managed);
+		const base = stripSavedFromBanner(note.managed);
 		if (!this.settings.showCover) return base;
 		const cover = coverImage(frontmatterValue(note.frontmatter, "cover"));
 		return cover ? `${cover}\n\n${base}` : base;
