@@ -16,6 +16,8 @@ export interface LinkwiseSettings {
 	syncIntervalMinutes: number;
 	/** What to do when a link is deleted in Linkwise. */
 	deletePolicy: DeletePolicy;
+	/** Keep the server's "Saved from <source>" banner at the top of each note. */
+	showSavedFrom: boolean;
 	/** Incremental cursor (ISO timestamp). Empty = full sync from scratch. */
 	cursor: string;
 	/** Last successful sync (ISO), for the status bar. */
@@ -28,6 +30,7 @@ export const DEFAULT_SETTINGS: LinkwiseSettings = {
 	vaultRoot: "Linkwise",
 	syncIntervalMinutes: 0,
 	deletePolicy: "mark",
+	showSavedFrom: false,
 	cursor: "",
 	lastSyncAt: "",
 };
@@ -106,6 +109,29 @@ export class LinkwiseSettingTab extends PluginSettingTab {
 						this.plugin.settings.deletePolicy = value as DeletePolicy;
 						await this.plugin.saveSettings();
 					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Show 'Saved from' banner")
+			.setDesc(
+				"Keep the source callout at the top of each note. Off by default for a cleaner note. Changes apply to newly synced notes; reset the sync state below to re-apply to every note.",
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.showSavedFrom)
+					.onChange(async (value) => {
+						this.plugin.settings.showSavedFrom = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Graph colors")
+			.setDesc("Color-code the graph so collection maps stand out from the notes they link. Adds color groups to your graph settings without touching anything you've already set.")
+			.addButton((btn) =>
+				btn
+					.setButtonText("Set up graph colors")
+					.onClick(() => void this.plugin.setupGraphColors()),
 			);
 
 		new Setting(containerEl)

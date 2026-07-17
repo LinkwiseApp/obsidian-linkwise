@@ -9,7 +9,7 @@
 
 import { normalizePath, TFile, TFolder } from "obsidian";
 import { pull, type PulledNote, type Tombstone } from "./api";
-import { composeNote, buildMOC } from "./markdown";
+import { composeNote, buildMOC, mocBaseName, stripSavedFromBanner } from "./markdown";
 import type LinkwisePlugin from "./main";
 
 export interface SyncResult {
@@ -93,19 +93,25 @@ export class SyncEngine {
 	// MARK: - Upsert
 
 	private async upsertNote(note: PulledNote, index: Map<string, TFile>): Promise<"created" | "updated"> {
+		const managed = this.managedBody(note);
 		const existing = index.get(note.linkwise_id);
 		if (existing) {
 			const current = await this.app.vault.read(existing);
-			const merged = composeNote(note.frontmatter, note.managed, current);
+			const merged = composeNote(note.frontmatter, managed, current);
 			if (merged !== current) await this.app.vault.modify(existing, merged);
 			return "updated";
 		}
 
 		const path = await this.resolveFreePath(normalizePath(note.path), note.linkwise_id);
 		await this.ensureFolder(path);
-		const created = await this.app.vault.create(path, composeNote(note.frontmatter, note.managed, null));
+		const created = await this.app.vault.create(path, composeNote(note.frontmatter, managed, null));
 		index.set(note.linkwise_id, created);
 		return "created";
+	}
+
+	/** The managed body to write — banner stripped unless the user opted to keep it. */
+	private managedBody(note: PulledNote): string {
+		return this.settings.showSavedFrom ? note.managed : stripSavedFromBanner(note.managed);
 	}
 
 	/**
@@ -176,10 +182,10 @@ export class SyncEngine {
 	/**
 	 * Rebuild the Map of Content for each collection whose notes changed this sync.
 	 *
-	 * The MOC file is named after its collection (e.g. `AI CONCEPTS.md`) so it reads
-	 * as the collection name — not a generic `_MOC` — in the graph and file explorer.
-	 * The MOC is identified by its `linkwise_moc: true` frontmatter, so legacy
-	 * `_MOC.md` files from older syncs are transparently renamed in place.
+	 * The MOC file is named `🗺️ <collection>.md` so its graph node and explorer
+	 * entry read as a distinct map. The MOC is identified by its `linkwise_moc: true`
+	 * frontmatter, so legacy MOCs (a plain `MOC.md`, an older `<collection> (MOC).md`,
+	 * `<collection>.md`, or `_MOC.md`) are transparently renamed in place.
 	 */
 	private async regenerateMOCs(collections: Set<string>): Promise<void> {
 		for (const collection of collections) {
@@ -191,23 +197,22 @@ export class SyncEngine {
 			let existingMoc: TFile | null = null;
 			for (const child of folder.children) {
 				if (!(child instanceof TFile) || child.extension !== "md") continue;
-				const fm = this.app.metadataCache.getFileCache(child)?.frontmatter;
+				const flags = await this.readNoteFlags(child);
 				// The MOC carries `linkwise_moc: true` and no `linkwise_id`; a legacy MOC
 				// may still be named `_MOC`. Everything else with an id is a real note.
-				if (fm?.linkwise_moc === true || child.basename === "_MOC") {
+				if (flags.isMoc || child.basename === "_MOC") {
 					existingMoc = child;
 					continue;
 				}
-				const id: unknown = fm?.linkwise_id;
-				if (typeof id === "string" && id.length > 0) baseNames.push(child.basename);
+				if (flags.hasLinkwiseId) baseNames.push(child.basename);
 			}
 
 			const content = buildMOC(collection, baseNames);
-			const desiredPath = normalizePath(`${folderPath}/${collection}.md`);
+			const desiredPath = normalizePath(`${folderPath}/${mocBaseName(collection)}.md`);
 
 			if (existingMoc) {
-				// Rename to the collection-named path when it's free (a note may already
-				// occupy it if one is titled exactly like the collection — leave it then).
+				// Rename to `🗺️ <collection>.md` when it's free (a note could already
+				// occupy it if one is titled exactly that — leave it in place then).
 				if (
 					existingMoc.path !== desiredPath &&
 					!this.app.vault.getAbstractFileByPath(desiredPath)
@@ -216,13 +221,43 @@ export class SyncEngine {
 				}
 				await this.app.vault.modify(existingMoc, content);
 			} else {
-				// A real note may already sit at the collection-named path; fall back so
-				// we never overwrite it.
+				// A real note may already sit at that path; fall back so we never overwrite it.
 				const mocPath = this.app.vault.getAbstractFileByPath(desiredPath)
-					? normalizePath(`${folderPath}/${collection} (MOC).md`)
+					? normalizePath(`${folderPath}/${mocBaseName(collection)} (index).md`)
 					: desiredPath;
 				await this.app.vault.create(mocPath, content);
 			}
 		}
+	}
+
+	/**
+	 * Whether a note is the collection's MOC and whether it carries a `linkwise_id`.
+	 *
+	 * Prefers Obsidian's metadata cache, but that cache lags files written earlier in
+	 * this same sync — a freshly created note reports no frontmatter yet, which would
+	 * make a brand-new collection's MOC index zero links. So when the cache is cold we
+	 * read the frontmatter block straight from disk.
+	 */
+	private async readNoteFlags(file: TFile): Promise<{ isMoc: boolean; hasLinkwiseId: boolean }> {
+		const cached = this.app.metadataCache.getFileCache(file)?.frontmatter;
+		if (cached) {
+			const id: unknown = cached.linkwise_id;
+			return {
+				isMoc: cached.linkwise_moc === true,
+				hasLinkwiseId: typeof id === "string" && id.length > 0,
+			};
+		}
+		let content: string;
+		try {
+			content = await this.app.vault.cachedRead(file);
+		} catch {
+			return { isMoc: false, hasLinkwiseId: false };
+		}
+		const match = /^---\n([\s\S]*?)\n---/.exec(content);
+		const yaml = match?.[1] ?? "";
+		return {
+			isMoc: /^linkwise_moc:\s*true\s*$/im.test(yaml),
+			hasLinkwiseId: /^linkwise_id:\s*["']?\S/im.test(yaml),
+		};
 	}
 }

@@ -11,6 +11,9 @@ The official Obsidian integration for [Linkwise](https://linkwise.app). Effortle
 *   **Local-First & Non-Destructive:** Linkwise keeps your summaries and highlights perfectly up to date, but anything *you* write in a note is completely safe and never overwritten.
 *   **Color-Coded Highlights:** Preserves your Linkwise highlight colors using clean CSS styling, mapped directly to frontmatter for easy filtering.
 *   **Smart Updates:** Notes are tracked via a unique identifier, allowing you to safely rename or reorganize files without creating accidental duplicates.
+*   **Distinct Collection Maps:** Each collection gets a **Map of Content** hub note (`🗺️ <Collection>`) that stands apart from the links it indexes — a 🗺️ map marker in its name, a summary callout with a live link count, and a `#linkwise/moc` tag.
+*   **One-Click Graph Colors:** A **Set up graph colors** command paints your collection maps a distinct color in Obsidian's graph, so hubs pop out from the notes around them — without disturbing any graph settings you've already made.
+*   **Clean Notes by Default:** The source "Saved from …" banner is hidden out of the box for a tidier note; flip it back on any time with a single toggle.
 
 > 📝 **Note:** This plugin requires an active [Linkwise Pro](https://linkwise.app/docs/linkwise-pro-subscription) subscription.
 
@@ -68,16 +71,37 @@ The plugin preserves your Linkwise organization by mapping your collections dire
 ```text
 Linkwise/
  ├── Research/
- │    ├── Research.md                  # Index note linking all collection items
+ │    ├── 🗺️ Research.md               # Map of Content — hub linking every link in the collection
  │    ├── Agent Harness Engineering.md
  │    └── Attention Is All You Need.md
  └── Unsorted/                         # For links not yet assigned to a collection
-      ├── Unsorted.md                  # Index note for unfiled links
+      ├── 🗺️ Unsorted.md               # Map of Content for unfiled links
       └── ...
 ```
 
+> ℹ️ Upgrading from an earlier version? Legacy index notes (a plain `MOC`, `<Collection> (MOC)`, the collection name itself, or the old `_MOC`) are renamed to `🗺️ <Collection>` automatically on the next sync — no duplicates, nothing lost.
+
+### Maps of Content
+Each collection folder contains a **Map of Content** — a fully managed `🗺️ <Collection>` note that wikilinks every link in the collection. The 🗺️ marker in its name makes it pop in the graph and file explorer, and its title comes straight from the filename (no redundant heading):
+
+```markdown
+---
+linkwise_moc: true
+collection: "Research"
+tags: [linkwise/moc]
+---
+
+> [!info] Map of Content
+> Index of the **Research** collection — 12 links.
+
+- [[Agent Harness Engineering]]
+- [[Attention Is All You Need]]
+```
+
+Run **Linkwise: Set up graph colors** (Command Palette, or the button in settings) to color these hubs distinctly in the graph view. See [Graph Colors](#graph-colors) below.
+
 ### Note Blueprint
-Every synced note features rich properties (frontmatter), an informational callout linking back to the source, and clean sections layout:
+Every synced note features rich properties (frontmatter) and a clean sections layout. The source "Saved from …" callout is **hidden by default**; enable **Show 'Saved from' banner** in settings to include it (shown commented below):
 
 ```markdown
 ---
@@ -92,7 +116,8 @@ saved: 2026-06-16
 cover: "https://..."
 ---
 
-> [!info] Saved from [addyosmani.com](https://addyosmani.com/blog/agent-harness-engineering/)
+<!-- Shown only when "Show 'Saved from' banner" is enabled: -->
+<!-- > [!info] Saved from [addyosmani.com](https://addyosmani.com/blog/agent-harness-engineering/) -->
 
 ## Summary
 The AI-generated summary text appears here...
@@ -118,6 +143,17 @@ To keep your data intact while allowing for seamless updates, the plugin uses a 
 *   **Everything BELOW `## My Notes`** belongs entirely to you. The sync engine will never overwrite or alter anything in this section. Do not modify or delete the `## My Notes` header itself.
 
 
+## Graph Colors
+
+Collections form little hub-and-spoke clusters in Obsidian's graph: the `🗺️ <Collection>` Map of Content hub in the center, its links around it. By default every node is the same color, so the hub blends in. The **Set up graph colors** command fixes that.
+
+Run it from the Command Palette (**Linkwise: Set up graph colors**) or the **Graph colors** button in settings. It adds two color groups to your graph configuration:
+
+*   **Collection maps** (`tag:#linkwise/moc`) — violet, so hubs pop out.
+*   **Linkwise notes** (`path:"<your vault folder>"`) — muted slate.
+
+The command is **non-destructive**: it only adds groups whose query you don't already have, and never edits or removes color groups you set up yourself. After running it, close and reopen the graph view to see the new colors. Prefer different colors? Adjust them any time under **Settings → Graph view → Groups**.
+
 ## Settings Reference
 
 | Setting | Description | Default |
@@ -126,6 +162,8 @@ To keep your data intact while allowing for seamless updates, the plugin uses a 
 | **Vault Folder** | The target directory path where all Linkwise notes will be written. | `Linkwise` |
 | **Auto-Sync Interval** | The frequency at which the plugin checks for updates in the background. | `Manual only` |
 | **On Deletion Strategy** | How to handle notes when their corresponding link is removed from Linkwise. Options: `Mark` (appends `linkwise_deleted: true`), `Trash` (moves to `_trash` folder), or `Ignore`. | `Mark` |
+| **Show 'Saved from' banner** | Keep the source callout at the top of each note. Off gives a cleaner note. Applies to newly synced notes; reset the sync state to re-apply to every note. | `Off` |
+| **Graph colors** | One-click button that adds graph color groups so collection maps stand out from notes. Non-destructive. | *N/A* |
 | **API Base URL** *(Advanced)* | Custom endpoint configuration. Only modify if self-hosting or testing locally. | *Production API* |
 | **Reset Sync State** *(Advanced)* | Clears the local sync cursor. The next sync will re-evaluate all items, gracefully merging changes without creating duplicates. | *N/A* |
 

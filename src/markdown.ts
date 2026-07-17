@@ -54,21 +54,53 @@ export function wikilinkTarget(fileBaseName: string): string {
 }
 
 /**
+ * Remove the server-rendered "Saved from <source>" banner from a managed body.
+ *
+ * The banner is an Obsidian callout (`> [!info] Saved from …`) the server renders
+ * at the top of the managed region. Matches that callout — its first line plus any
+ * `>` continuation lines — then collapses the blank gap it leaves behind so the
+ * summary starts cleanly. Anything else in the managed body is untouched.
+ */
+export function stripSavedFromBanner(managed: string): string {
+  return managed
+    .replace(/^[ \t]*>[^\n]*\bSaved from\b[^\n]*(?:\n[ \t]*>[^\n]*)*\n?/im, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\s*\n/, "");
+}
+
+/** Tag stamped on every MOC note — the anchor for the graph color group. */
+export const MOC_TAG = "linkwise/moc";
+
+/** Basename (no extension) of a collection's Map of Content note. */
+export function mocBaseName(collection: string): string {
+  return `🗺️ ${collection}`;
+}
+
+/**
  * A Map of Content for one collection: a fully Linkwise-managed index note that
- * wikilinks every synced note in the collection. Regenerated wholesale each sync
+ * wikilinks every synced link in the collection. Regenerated wholesale each sync
  * (it carries no user content), and marked so the indexer skips it.
+ *
+ * The note is deliberately styled to stand apart from the links it indexes: the
+ * filename carries a `🗺️` map marker, a callout summarizes the link count, and the
+ * `linkwise/moc` tag lets the "Set up graph colors" command paint it a distinct
+ * color. The note title comes from the filename, so there is no redundant heading.
  */
 export function buildMOC(collection: string, noteBaseNames: string[]): string {
   const sorted = [...noteBaseNames].sort((a, b) => a.localeCompare(b));
   const links = sorted.map((n) => `- [[${wikilinkTarget(n)}]]`).join("\n");
-  const body = links.length > 0 ? links : "_No notes yet._";
+  const count = sorted.length;
+  const body = count > 0 ? links : "_No links yet._";
+  const countLabel = count === 1 ? "1 link" : `${count} links`;
   return [
     "---",
     "linkwise_moc: true",
     `collection: ${JSON.stringify(collection)}`,
+    `tags: [${MOC_TAG}]`,
     "---",
     "",
-    `# ${collection}`,
+    "> [!info] Map of Content",
+    `> Index of the **${collection}** collection — ${countLabel}.`,
     "",
     body,
     "",
